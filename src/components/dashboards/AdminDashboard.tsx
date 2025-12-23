@@ -30,6 +30,8 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
   const [newClass, setNewClass] = useState({ name: '', grade: '', teacherId: '' });
   const [newStudent, setNewStudent] = useState({ name: '', username: '', password: '', classId: '' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '', priority: 'normal' as const });
+  const [selectedTimetableClass, setSelectedTimetableClass] = useState<string>('');
+  const [timetableData, setTimetableData] = useState<Record<string, { subject: string; time: string }[]>>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -41,6 +43,12 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
     ];
     return () => unsubs.forEach(u => u());
   }, []);
+
+  useEffect(() => {
+    if (!selectedTimetableClass) { setTimetableData({}); return; }
+    const unsub = dbListen(`schedules/${selectedTimetableClass}`, (data) => setTimetableData(data || {}));
+    return () => unsub();
+  }, [selectedTimetableClass]);
 
   const handleAddTeacher = async () => {
     if (!newTeacher.name || !newTeacher.username || !newTeacher.password || !newTeacher.subject) {
@@ -441,6 +449,120 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
                 {classes.length * 30}
               </p>
               <p className="text-xs text-muted-foreground mt-1">Based on 30/class</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentPage === 'settings') {
+    return (
+      <div ref={ref} className="space-y-6">
+        <div>
+          <h3 className="text-2xl font-display font-bold">System Settings</h3>
+          <p className="text-muted-foreground">Manage application preferences and configurations</p>
+        </div>
+
+        <div className="grid gap-6">
+          <Card className="shadow-xl border-0">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="font-display">General Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">School Name</label>
+                  <Input defaultValue="Crescent School" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Academic Year</label>
+                  <Input defaultValue="2024-2025" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Contact Email</label>
+                  <Input defaultValue="admin@crescent.edu" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Phone Number</label>
+                  <Input defaultValue="+1 (555) 123-4567" />
+                </div>
+              </div>
+              <div className="pt-4 flex justify-end">
+                <Button className="bg-gradient-primary"><Check className="w-4 h-4 mr-2" />Save Changes</Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-xl border-0">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="font-display text-destructive">Danger Zone</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-xl bg-destructive/5">
+                <div>
+                  <h4 className="font-semibold text-destructive">Reset System Data</h4>
+                  <p className="text-sm text-muted-foreground">Clear all student and teacher data. This action cannot be undone.</p>
+                </div>
+                <Button variant="destructive">Reset Data</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentPage === 'timetable') {
+    return (
+      <div ref={ref} className="space-y-6">
+        <div>
+          <h3 className="text-2xl font-display font-bold">Class Timetables</h3>
+          <p className="text-muted-foreground">View schedules for all classes</p>
+        </div>
+
+        <div className="grid gap-6">
+          <Card className="shadow-xl border-0">
+            <CardHeader className="border-b border-border/50">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-display">Master Schedule View</CardTitle>
+                 <select 
+                   className="h-10 px-4 rounded-xl border border-input bg-card"
+                   value={selectedTimetableClass}
+                   onChange={(e) => setSelectedTimetableClass(e.target.value)}
+                 >
+                  <option value="">Select Class to View</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name} (Grade {c.grade})</option>)}
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              {!selectedTimetableClass ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Clock className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p>Select a class to view its full weekly timetable</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
+                    <div key={day} className="space-y-3">
+                      <div className="text-center p-2 rounded-lg bg-muted font-semibold">{day}</div>
+                      <div className="space-y-2">
+                        {(timetableData[day] || []).length > 0 ? (
+                          (timetableData[day] || []).map((slot, i) => (
+                            <div key={i} className="p-3 rounded-lg border bg-card hover:shadow-md transition-all">
+                              <div className="text-xs font-mono text-muted-foreground mb-1">{slot.time}</div>
+                              <div className="font-medium text-sm">{slot.subject}</div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-4 text-xs text-muted-foreground border border-dashed rounded-lg">No classes</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

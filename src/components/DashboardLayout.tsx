@@ -50,6 +50,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentPage
           { label: 'Students', icon: <GraduationCap className="w-5 h-5" />, path: 'students' },
           { label: 'Timetable', icon: <Clock className="w-5 h-5" />, path: 'timetable' },
           { label: 'Reports', icon: <BarChart3 className="w-5 h-5" />, path: 'reports' },
+          { label: 'Settings', icon: <Settings className="w-5 h-5" />, path: 'settings' },
         ];
       case 'teacher':
         return [
@@ -58,12 +59,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentPage
           { label: 'Attendance', icon: <Calendar className="w-5 h-5" />, path: 'attendance' },
           { label: 'Homework', icon: <ClipboardList className="w-5 h-5" />, path: 'homework' },
           { label: 'Grades', icon: <FileText className="w-5 h-5" />, path: 'grades' },
+          { label: 'Schedule', icon: <Clock className="w-5 h-5" />, path: 'schedule' },
           { label: 'Announcements', icon: <Megaphone className="w-5 h-5" />, path: 'announcements' },
         ];
       case 'student':
         return [
           { label: 'Dashboard', icon: <Home className="w-5 h-5" />, path: 'dashboard' },
-          { label: 'My Schedule', icon: <Clock className="w-5 h-5" />, path: 'schedule' },
           { label: 'Attendance', icon: <Calendar className="w-5 h-5" />, path: 'attendance' },
           { label: 'Homework', icon: <ClipboardList className="w-5 h-5" />, path: 'homework' },
           { label: 'Grades', icon: <FileText className="w-5 h-5" />, path: 'grades' },

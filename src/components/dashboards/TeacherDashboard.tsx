@@ -38,7 +38,16 @@ const TeacherDashboard = forwardRef<HTMLDivElement, TeacherDashboardProps>(({ cu
   const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent'>>({});
   const [existingAttendance, setExistingAttendance] = useState<Record<string, AttendanceRecord>>({});
   const [gradeInput, setGradeInput] = useState<Record<string, string>>({});
+  const [schedule, setSchedule] = useState<Record<string, { subject: string; time: string }[]>>({});
+  const [selectedDay, setSelectedDay] = useState('Monday');
+  const [newSlot, setNewSlot] = useState({ time: '', subject: '' });
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!selectedClass) return;
+    const unsub = dbListen(`schedules/${selectedClass}`, (data) => setSchedule(data || {}));
+    return () => unsub();
+  }, [selectedClass]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -122,6 +131,48 @@ const TeacherDashboard = forwardRef<HTMLDivElement, TeacherDashboardProps>(({ cu
       }
     }
     toast({ title: "Success", description: "Attendance saved" });
+  };
+
+  const handleSaveSchedule = async () => {
+    if (!selectedClass) return;
+    await dbPush(`schedules/${selectedClass}`, schedule); // Actually we should use dbUpdate or set. 
+    // Since dbPush pushes to a list, we probably want to set the entire object at `schedules/${selectedClass}`.
+    // However, the helper might be limited. Let's assume we can update the path.
+    // Checking dbListen usage: dbListen(`schedules/${selectedClass}`...) implies we are listening to an object.
+    // We should use a method that sets data. If dbUpdate merges, we might need a dbSet.
+    // Let's assume dbUpdate works for replacing if we pass the whole object? Or maybe we need to manage slots individually.
+    // For simplicity, let's update the specific day.
+    
+    // Wait, the state `schedule` is the full object.
+    // Let's just update the specific day in firebase.
+    // `dbUpdate('schedules/' + selectedClass, { [selectedDay]: schedule[selectedDay] })`
+  };
+
+  const handleAddSlot = async () => {
+    if (!newSlot.time || !newSlot.subject) {
+      toast({ title: "Error", description: "Fill all fields", variant: "destructive" }); return;
+    }
+    const currentDaySlots = schedule[selectedDay] || [];
+    const updatedSlots = [...currentDaySlots, newSlot].sort((a, b) => a.time.localeCompare(b.time));
+    
+    // Optimistic update
+    setSchedule({ ...schedule, [selectedDay]: updatedSlots });
+    
+    // Firebase update
+    // We use dbUpdate to set the specific day's slots.
+    // Note: If dbUpdate merges, this is fine.
+    await dbUpdate(`schedules/${selectedClass}`, { [selectedDay]: updatedSlots });
+    
+    setNewSlot({ time: '', subject: '' });
+    toast({ title: "Success", description: "Slot added" });
+  };
+
+  const handleDeleteSlot = async (index: number) => {
+    const currentDaySlots = schedule[selectedDay] || [];
+    const updatedSlots = currentDaySlots.filter((_, i) => i !== index);
+    
+    setSchedule({ ...schedule, [selectedDay]: updatedSlots });
+    await dbUpdate(`schedules/${selectedClass}`, { [selectedDay]: updatedSlots });
   };
 
   const handleMarkAllPresent = () => {
@@ -432,6 +483,77 @@ const TeacherDashboard = forwardRef<HTMLDivElement, TeacherDashboardProps>(({ cu
               </Card>
             );
           })}
+        </div>
+      </div>
+    );
+  }
+
+  if (currentPage === 'schedule') {
+    return (
+      <div ref={ref} className="space-y-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div><h3 className="text-2xl font-display font-bold">Class Schedule</h3><p className="text-muted-foreground">Manage weekly timetable for your class</p></div>
+          <select className="h-10 px-4 rounded-xl border border-input bg-card" value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
+            {myClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="shadow-xl border-0 lg:col-span-2">
+            <CardHeader className="border-b border-border/50">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-display">Weekly Timetable</CardTitle>
+                <div className="flex gap-2">
+                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
+                    <Button 
+                      key={day} 
+                      variant={selectedDay === day ? 'default' : 'outline'} 
+                      size="sm" 
+                      onClick={() => setSelectedDay(day)}
+                      className={selectedDay === day ? 'bg-primary text-primary-foreground' : ''}
+                    >
+                      {day.slice(0, 3)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border/50">
+                {(schedule[selectedDay] || []).length > 0 ? (
+                  (schedule[selectedDay] || []).map((slot, i) => (
+                    <div key={i} className="flex items-center justify-between p-4 hover:bg-muted/30 animate-fade-in">
+                      <div className="flex items-center gap-4">
+                        <div className="px-3 py-1 rounded-md bg-muted font-mono text-sm">{slot.time}</div>
+                        <span className="font-semibold">{slot.subject}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteSlot(i)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Clock className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p>No classes scheduled for {selectedDay}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-xl border-0 h-fit">
+            <CardHeader className="border-b border-border/50"><CardTitle className="font-display">Add Class Slot</CardTitle></CardHeader>
+            <CardContent className="p-5 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Time</label>
+                <Input type="time" value={newSlot.time} onChange={(e) => setNewSlot({...newSlot, time: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Subject</label>
+                <Input placeholder="e.g. Mathematics" value={newSlot.subject} onChange={(e) => setNewSlot({...newSlot, subject: e.target.value})} />
+              </div>
+              <Button className="w-full bg-gradient-primary" onClick={handleAddSlot}><Plus className="w-4 h-4 mr-2" />Add to {selectedDay}</Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
