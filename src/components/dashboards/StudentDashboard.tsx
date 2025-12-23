@@ -292,8 +292,6 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
     );
   }
 
-
-
   if (currentPage === 'grades') {
     const avgGrade = grades.length > 0 ? grades.filter(g => !isNaN(parseInt(g.grade))).reduce((acc, g) => acc + parseInt(g.grade), 0) / grades.filter(g => !isNaN(parseInt(g.grade))).length : 0;
     return (

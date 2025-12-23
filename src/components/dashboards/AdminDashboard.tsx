@@ -8,9 +8,8 @@ import { dbPush, dbRemove, dbListen } from '@/lib/firebase';
 import { 
   Users, GraduationCap, BookOpen, Plus, Trash2, X, Check, 
   Megaphone, Send, TrendingUp, Award, Search, MoreVertical,
-  UserPlus, School, Bell, Calendar, Clock, ChevronRight, BarChart3, PieChart
+  UserPlus, School, Bell, Calendar, Clock, ChevronRight
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 
 interface Teacher { id: string; name: string; username: string; password: string; subject: string; }
 interface Class { id: string; name: string; grade: string; teacherId: string; teacherName: string; }
@@ -30,8 +29,6 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
   const [newClass, setNewClass] = useState({ name: '', grade: '', teacherId: '' });
   const [newStudent, setNewStudent] = useState({ name: '', username: '', password: '', classId: '' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '', priority: 'normal' as const });
-  const [selectedTimetableClass, setSelectedTimetableClass] = useState<string>('');
-  const [timetableData, setTimetableData] = useState<Record<string, { subject: string; time: string }[]>>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -43,12 +40,6 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
     ];
     return () => unsubs.forEach(u => u());
   }, []);
-
-  useEffect(() => {
-    if (!selectedTimetableClass) { setTimetableData({}); return; }
-    const unsub = dbListen(`schedules/${selectedTimetableClass}`, (data) => setTimetableData(data || {}));
-    return () => unsub();
-  }, [selectedTimetableClass]);
 
   const handleAddTeacher = async () => {
     if (!newTeacher.name || !newTeacher.username || !newTeacher.password || !newTeacher.subject) {
@@ -349,223 +340,6 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
           ))}
         </div>
         {showModal === 'student' && <Modal title="Enroll Student" onClose={() => setShowModal(null)}><div className="space-y-4"><div className="grid grid-cols-2 gap-4"><Input placeholder="Full Name" value={newStudent.name} onChange={(e) => setNewStudent({...newStudent, name: e.target.value})} /><Input placeholder="Username" value={newStudent.username} onChange={(e) => setNewStudent({...newStudent, username: e.target.value})} /></div><Input placeholder="Password" type="password" value={newStudent.password} onChange={(e) => setNewStudent({...newStudent, password: e.target.value})} /><select className="w-full h-10 px-3 rounded-lg border border-input bg-background" value={newStudent.classId} onChange={(e) => setNewStudent({...newStudent, classId: e.target.value})}><option value="">Select Class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><Button className="w-full bg-gradient-primary" onClick={handleAddStudent}><Check className="w-4 h-4 mr-2" />Enroll</Button></div></Modal>}
-      </div>
-    );
-  }
-
-  if (currentPage === 'reports') {
-    const studentsByGrade = classes.map(cls => {
-      const count = students.filter(s => s.classId === cls.id).length;
-      return { name: `Grade ${cls.grade}`, count };
-    }).sort((a, b) => a.name.localeCompare(b.name));
-
-    const teachersBySubject = Object.entries(teachers.reduce((acc, teacher) => {
-      acc[teacher.subject] = (acc[teacher.subject] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)).map(([name, value]) => ({ name, value }));
-
-    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
-
-    return (
-      <div ref={ref} className="space-y-6">
-        <div>
-          <h3 className="text-2xl font-display font-bold">Reports & Analytics</h3>
-          <p className="text-muted-foreground">System-wide statistics and insights</p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="shadow-xl border-0">
-            <CardHeader>
-              <CardTitle className="font-display flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-primary" />
-                Enrollment by Grade
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={studentsByGrade}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-xl border-0">
-            <CardHeader>
-              <CardTitle className="font-display flex items-center gap-2">
-                <PieChart className="w-5 h-5 text-secondary" />
-                Teachers by Subject
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsPieChart>
-                  <Pie
-                    data={teachersBySubject}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {teachersBySubject.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </RechartsPieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-primary/5 border-primary/20">
-            <CardContent className="p-6 text-center">
-              <h4 className="text-muted-foreground font-medium mb-2">Avg. Class Size</h4>
-              <p className="text-4xl font-display font-bold text-primary">
-                {classes.length > 0 ? Math.round(students.length / classes.length) : 0}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-secondary/5 border-secondary/20">
-            <CardContent className="p-6 text-center">
-              <h4 className="text-muted-foreground font-medium mb-2">Student/Teacher Ratio</h4>
-              <p className="text-4xl font-display font-bold text-secondary">
-                {teachers.length > 0 ? Math.round(students.length / teachers.length) : 0}:1
-              </p>
-            </CardContent>
-          </Card>
-           <Card className="bg-success/5 border-success/20">
-            <CardContent className="p-6 text-center">
-              <h4 className="text-muted-foreground font-medium mb-2">Total Capacity</h4>
-              <p className="text-4xl font-display font-bold text-success">
-                {classes.length * 30}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Based on 30/class</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  if (currentPage === 'settings') {
-    return (
-      <div ref={ref} className="space-y-6">
-        <div>
-          <h3 className="text-2xl font-display font-bold">System Settings</h3>
-          <p className="text-muted-foreground">Manage application preferences and configurations</p>
-        </div>
-
-        <div className="grid gap-6">
-          <Card className="shadow-xl border-0">
-            <CardHeader className="border-b border-border/50">
-              <CardTitle className="font-display">General Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">School Name</label>
-                  <Input defaultValue="Crescent School" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Academic Year</label>
-                  <Input defaultValue="2024-2025" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Contact Email</label>
-                  <Input defaultValue="admin@crescent.edu" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Phone Number</label>
-                  <Input defaultValue="+1 (555) 123-4567" />
-                </div>
-              </div>
-              <div className="pt-4 flex justify-end">
-                <Button className="bg-gradient-primary"><Check className="w-4 h-4 mr-2" />Save Changes</Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-xl border-0">
-            <CardHeader className="border-b border-border/50">
-              <CardTitle className="font-display text-destructive">Danger Zone</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-xl bg-destructive/5">
-                <div>
-                  <h4 className="font-semibold text-destructive">Reset System Data</h4>
-                  <p className="text-sm text-muted-foreground">Clear all student and teacher data. This action cannot be undone.</p>
-                </div>
-                <Button variant="destructive">Reset Data</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  if (currentPage === 'timetable') {
-    return (
-      <div ref={ref} className="space-y-6">
-        <div>
-          <h3 className="text-2xl font-display font-bold">Class Timetables</h3>
-          <p className="text-muted-foreground">View schedules for all classes</p>
-        </div>
-
-        <div className="grid gap-6">
-          <Card className="shadow-xl border-0">
-            <CardHeader className="border-b border-border/50">
-              <div className="flex items-center justify-between">
-                <CardTitle className="font-display">Master Schedule View</CardTitle>
-                 <select 
-                   className="h-10 px-4 rounded-xl border border-input bg-card"
-                   value={selectedTimetableClass}
-                   onChange={(e) => setSelectedTimetableClass(e.target.value)}
-                 >
-                  <option value="">Select Class to View</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.name} (Grade {c.grade})</option>)}
-                </select>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6">
-              {!selectedTimetableClass ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Clock className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p>Select a class to view its full weekly timetable</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
-                    <div key={day} className="space-y-3">
-                      <div className="text-center p-2 rounded-lg bg-muted font-semibold">{day}</div>
-                      <div className="space-y-2">
-                        {(timetableData[day] || []).length > 0 ? (
-                          (timetableData[day] || []).map((slot, i) => (
-                            <div key={i} className="p-3 rounded-lg border bg-card hover:shadow-md transition-all">
-                              <div className="text-xs font-mono text-muted-foreground mb-1">{slot.time}</div>
-                              <div className="font-medium text-sm">{slot.subject}</div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-center py-4 text-xs text-muted-foreground border border-dashed rounded-lg">No classes</div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </div>
     );
   }
