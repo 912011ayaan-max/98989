@@ -28,8 +28,10 @@ interface Class {
   id: string;
   name: string;
   grade: string;
-  teacherId: string;
-  teacherName: string;
+  teacherId?: string;
+  teacherName?: string;
+  teacherIds?: string[];
+  teacherNames?: string[];
 }
 
 interface TimetablePanelProps {
@@ -63,6 +65,8 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
     endTime: '09:00',
     room: ''
   });
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
+  const [selectedTeacherName, setSelectedTeacherName] = useState<string>('');
   const [workingDays, setWorkingDays] = useState<string[]>(DAYS);
   const [daysSelection, setDaysSelection] = useState<Record<string, boolean>>({
     Sunday: false,
@@ -153,16 +157,34 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
     }
 
     const cls = classes.find(c => c.id === selectedClass);
+    let tId = selectedTeacherId;
+    let tName = selectedTeacherName;
+    if (!tId || !tName) {
+      if (user?.role === 'teacher') {
+        tId = user.id;
+        tName = user.name;
+      } else {
+        if (Array.isArray(cls?.teacherIds) && Array.isArray(cls?.teacherNames) && cls!.teacherIds!.length > 0) {
+          tId = cls!.teacherIds![0];
+          tName = cls!.teacherNames![0];
+        } else {
+          tId = cls?.teacherId || '';
+          tName = cls?.teacherName || '';
+        }
+      }
+    }
     await dbPush('timetable', {
       ...newEntry,
       classId: selectedClass,
       className: cls?.name || '',
-      teacherId: user?.role === 'teacher' ? user.id : cls?.teacherId,
-      teacherName: user?.role === 'teacher' ? user.name : cls?.teacherName,
+      teacherId: tId,
+      teacherName: tName,
       createdAt: new Date().toISOString()
     });
 
     setNewEntry({ subject: '', day: 'Monday', startTime: '08:00', endTime: '09:00', room: '' });
+    setSelectedTeacherId('');
+    setSelectedTeacherName('');
     setShowAddPanel(false);
     toast({ title: "Success", description: "Timetable entry added" });
   };
@@ -239,7 +261,9 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
               </div>
               <div>
                 <h3 className="text-2xl font-display font-bold text-primary-foreground">{currentClass.name}</h3>
-                <p className="text-primary-foreground/80">Grade {currentClass.grade} • {currentClass.teacherName}</p>
+                <p className="text-primary-foreground/80">
+                  Grade {currentClass.grade} • {Array.isArray(currentClass.teacherNames) && currentClass.teacherNames.length > 0 ? currentClass.teacherNames.join(', ') : (currentClass.teacherName || 'Unassigned')}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -405,6 +429,30 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
                 className="w-full h-10 px-3 rounded-lg border border-input bg-background"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Assign Teacher</label>
+            {currentClass && (
+              <select
+                value={selectedTeacherId}
+                onChange={(e) => {
+                  const idx = (currentClass.teacherIds || []).indexOf(e.target.value);
+                  setSelectedTeacherId(e.target.value);
+                  setSelectedTeacherName(idx >= 0 ? (currentClass.teacherNames || [])[idx] || '' : '');
+                }}
+                className="w-full h-10 px-3 rounded-lg border border-input bg-background"
+              >
+                <option value="">Select</option>
+                {Array.isArray(currentClass.teacherIds) && currentClass.teacherIds.length > 0 ? (
+                  currentClass.teacherIds.map((tid, i) => (
+                    <option key={tid} value={tid}>{(currentClass.teacherNames || [])[i] || 'Teacher'}</option>
+                  ))
+                ) : (
+                  <option value={currentClass.teacherId || ''}>{currentClass.teacherName || 'Unassigned'}</option>
+                )}
+              </select>
+            )}
           </div>
 
           <div className="space-y-2">

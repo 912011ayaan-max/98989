@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 interface Teacher { id: string; name: string; username: string; password: string; subject: string; }
-interface Class { id: string; name: string; grade: string; teacherId: string; teacherName: string; }
+interface Class { id: string; name: string; grade: string; teacherId?: string; teacherName?: string; teacherIds?: string[]; teacherNames?: string[]; }
 interface Student { id: string; name: string; username: string; password: string; classId: string; className: string; }
 interface Announcement { id: string; title: string; content: string; priority: 'normal' | 'important' | 'urgent'; createdAt: string; author: string; }
 
@@ -30,7 +30,7 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
   const [showPanel, setShowPanel] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [newTeacher, setNewTeacher] = useState({ name: '', username: '', password: '', subject: '' });
-  const [newClass, setNewClass] = useState({ name: '', grade: '', teacherId: '' });
+  const [newClass, setNewClass] = useState({ name: '', grade: '', teacherIds: [] as string[] });
   const [newStudent, setNewStudent] = useState({ name: '', username: '', password: '', classId: '' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '', priority: 'normal' as const });
   const { toast } = useToast();
@@ -55,12 +55,23 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
   };
 
   const handleAddClass = async () => {
-    if (!newClass.name || !newClass.grade || !newClass.teacherId) {
+    if (!newClass.name || !newClass.grade || !newClass.teacherIds || newClass.teacherIds.length === 0) {
       toast({ title: "Error", description: "Please fill all fields", variant: "destructive" }); return;
     }
-    const teacher = teachers.find(t => t.id === newClass.teacherId);
-    await dbPush('classes', { ...newClass, teacherName: teacher?.name || 'Unassigned', createdAt: new Date().toISOString() });
-    setNewClass({ name: '', grade: '', teacherId: '' });
+    const selectedTeachers = teachers.filter(t => newClass.teacherIds.includes(t.id));
+    const teacherNames = selectedTeachers.map(t => t.name);
+    const primaryTeacherId = selectedTeachers[0]?.id || '';
+    const primaryTeacherName = selectedTeachers[0]?.name || 'Unassigned';
+    await dbPush('classes', { 
+      name: newClass.name, 
+      grade: newClass.grade, 
+      teacherIds: newClass.teacherIds, 
+      teacherNames, 
+      teacherId: primaryTeacherId, 
+      teacherName: primaryTeacherName,
+      createdAt: new Date().toISOString() 
+    });
+    setNewClass({ name: '', grade: '', teacherIds: [] });
     toast({ title: "Success", description: "Class created successfully" });
   };
 
@@ -233,11 +244,27 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
               <Input placeholder="e.g., 10" value={newClass.grade} onChange={(e) => setNewClass({...newClass, grade: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Assign Teacher</label>
-              <select className="w-full h-10 px-3 rounded-lg border border-input bg-background" value={newClass.teacherId} onChange={(e) => setNewClass({...newClass, teacherId: e.target.value})}>
-                <option value="">Select a teacher</option>
-                {teachers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.subject})</option>)}
-              </select>
+              <label className="text-sm font-medium text-muted-foreground">Assign Teachers</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {teachers.map(t => {
+                  const checked = newClass.teacherIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => {
+                        const next = checked 
+                          ? newClass.teacherIds.filter(id => id !== t.id) 
+                          : [...newClass.teacherIds, t.id];
+                        setNewClass({ ...newClass, teacherIds: next });
+                      }}
+                      className={`flex items-center justify-between p-3 rounded-xl border ${checked ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted/30 border-border/50'}`}
+                    >
+                      <span className="font-medium">{t.name}</span>
+                      <span className="text-xs text-muted-foreground">{t.subject}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <Button className="w-full bg-gradient-primary" onClick={handleAddClass}><Save className="w-4 h-4 mr-2" />Create Class</Button>
           </div>
