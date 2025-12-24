@@ -8,6 +8,7 @@ import {
   TrendingUp, Award, Clock, BookOpen, Megaphone, Upload,
   CheckCircle2, AlertCircle, BarChart3, Star
 } from 'lucide-react';
+import TimetablePanel from './TimetablePanel';
 
 interface Homework { id: string; title: string; description: string; dueDate: string; classId: string; className: string; subject: string; createdAt: string; }
 interface AttendanceRecord { id: string; date: string; status: 'present' | 'absent'; }
@@ -240,6 +241,14 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
             </div>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  if (currentPage === 'schedule') {
+    return (
+      <div ref={ref}>
+        <TimetablePanel currentPage={currentPage} />
       </div>
     );
   }
