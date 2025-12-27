@@ -1,6 +1,8 @@
 import React, { useState, useEffect, forwardRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { dbListen, dbPush } from '@/lib/firebase';
 import { 
@@ -15,6 +17,7 @@ interface GradeRecord { id: string; subject: string; grade: string; date: string
 interface Announcement { id: string; title: string; content: string; createdAt: string; author?: string; priority?: string; }
 interface ClassAnnouncement { id: string; title: string; content: string; classId: string; className: string; teacherName: string; createdAt: string; }
 interface Submission { id: string; homeworkId: string; studentId: string; studentName: string; submittedAt: string; }
+interface ComplaintMessage { id: string; sender: 'student' | 'admin'; text: string; timestamp: string; }
 
 interface StudentDashboardProps { currentPage: string; }
 
@@ -26,6 +29,8 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [schoolAnnouncements, setSchoolAnnouncements] = useState<Announcement[]>([]);
   const [classAnnouncements, setClassAnnouncements] = useState<ClassAnnouncement[]>([]);
+  const [complaintMessages, setComplaintMessages] = useState<ComplaintMessage[]>([]);
+  const [newComplaint, setNewComplaint] = useState('');
 
   useEffect(() => {
     if (!user?.id) return;
@@ -35,7 +40,17 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
       dbListen(`attendance/${user.id}`, (data) => setAttendance(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })) : [])),
       dbListen(`grades/${user.id}`, (data) => setGrades(data ? Object.entries(data).map(([id, g]: [string, any]) => ({ id, ...g })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [])),
       dbListen('announcements', (data) => setSchoolAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [])),
-      dbListen('classAnnouncements', (data) => setClassAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).filter((a: ClassAnnouncement) => a.classId === user?.classId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : []))
+      dbListen('classAnnouncements', (data) => setClassAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).filter((a: ClassAnnouncement) => a.classId === user?.classId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [])),
+      dbListen(`complaints/${user.id}/messages`, (data) => {
+        if (!data) { setComplaintMessages([]); return; }
+        const msgs = Object.entries(data).map(([id, m]: [string, any]) => ({
+          id,
+          sender: m.sender,
+          text: m.text,
+          timestamp: m.timestamp
+        })) as ComplaintMessage[];
+        setComplaintMessages(msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
+      })
     ];
     return () => unsubs.forEach(u => u());
   }, [user?.id, user?.classId]);
@@ -55,6 +70,23 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
 
   const handleSubmitHomework = async (hw: Homework) => {
     await dbPush('submissions', { homeworkId: hw.id, studentId: user?.id, studentName: user?.name, submittedAt: new Date().toISOString(), status: 'submitted' });
+  };
+
+  const hasSentComplaintToday = (() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    return complaintMessages.some(m => m.sender === 'student' && m.timestamp.startsWith(todayStr));
+  })();
+
+  const handleSendComplaint = async () => {
+    if (!newComplaint.trim() || hasSentComplaintToday || !user?.id) return;
+    await dbPush(`complaints/${user.id}/messages`, {
+      sender: 'student',
+      text: newComplaint.trim(),
+      timestamp: new Date().toISOString(),
+      studentId: user.id,
+      studentName: user.name
+    });
+    setNewComplaint('');
   };
 
   const stats = getAttendanceStats();
@@ -203,6 +235,47 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
             </CardContent>
           </Card>
         )}
+      </div>
+    );
+  }
+
+  if (currentPage === 'complaints') {
+    return (
+      <div ref={ref} className="space-y-6">
+        <div><h3 className="text-2xl font-display font-bold">Complaint Box</h3><p className="text-muted-foreground">You can send one complaint per day to the Principal</p></div>
+        <Card className="shadow-xl border-0">
+          <CardHeader className="border-b border-border/50">
+            <CardTitle className="font-display">Conversation with Principal</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="h-[420px] overflow-y-auto p-4 space-y-3 bg-muted/30">
+              {complaintMessages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.sender === 'student' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[75%] p-3 rounded-2xl ${msg.sender === 'student' ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-secondary/15 text-foreground rounded-bl-sm'}`}>
+                    <p className="text-sm">{msg.text}</p>
+                    <p className="text-[10px] mt-1 opacity-70">{new Date(msg.timestamp).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))}
+              {complaintMessages.length === 0 && (
+                <div className="text-center py-16 text-muted-foreground">No messages yet</div>
+              )}
+            </div>
+            <div className="p-4 border-t border-border/50 flex items-center gap-3">
+              <Textarea
+                placeholder={hasSentComplaintToday ? 'You have already sent a complaint today' : 'Write your complaint...'}
+                value={newComplaint}
+                onChange={(e) => setNewComplaint(e.target.value)}
+                className="flex-1"
+                rows={2}
+                disabled={hasSentComplaintToday}
+              />
+              <Button className="bg-gradient-primary" onClick={handleSendComplaint} disabled={hasSentComplaintToday || !newComplaint.trim()}>
+                Send
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

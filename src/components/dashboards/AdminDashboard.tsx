@@ -14,6 +14,7 @@ import {
   Megaphone, Send, TrendingUp, Award, Search,
   UserPlus, School, Bell, Calendar, Clock, ChevronRight, Save, MoreVertical, Cog
 } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { 
   DropdownMenu,
   DropdownMenuTrigger,
@@ -27,6 +28,8 @@ interface Teacher { id: string; name: string; username: string; password: string
 interface Class { id: string; name: string; grade: string; teacherId: string; teacherName: string; secondaryTeachers?: { id: string; name: string }[]; }
 interface Student { id: string; name: string; username: string; password: string; classId: string; className: string; }
 interface Announcement { id: string; title: string; content: string; priority: 'normal' | 'important' | 'urgent'; createdAt: string; author: string; }
+interface ComplaintMessage { id: string; sender: 'student' | 'admin'; text: string; timestamp: string; studentId?: string; studentName?: string; }
+interface ComplaintThread { studentId: string; studentName: string; messages: ComplaintMessage[]; }
 
 interface AdminDashboardProps { currentPage: string; }
 
@@ -45,13 +48,43 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
   const [manageClass, setManageClass] = useState({ name: '', grade: '', teacherId: '', secondaryTeacherIds: [] as string[] });
   const [secondarySelections, setSecondarySelections] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+  const [complaintThreads, setComplaintThreads] = useState<ComplaintThread[]>([]);
+  const [selectedThread, setSelectedThread] = useState<string | null>(null);
+  const [adminReply, setAdminReply] = useState('');
 
   useEffect(() => {
     const unsubs = [
       dbListen('teachers', (data) => setTeachers(data ? Object.entries(data).map(([id, t]: [string, any]) => ({ id, ...t })) : [])),
       dbListen('classes', (data) => setClasses(data ? Object.entries(data).map(([id, c]: [string, any]) => ({ id, ...c })) : [])),
       dbListen('students', (data) => setStudents(data ? Object.entries(data).map(([id, s]: [string, any]) => ({ id, ...s })) : [])),
-      dbListen('announcements', (data) => setAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : []))
+      dbListen('announcements', (data) => setAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [])),
+      dbListen('complaints', (data) => {
+        if (!data) { setComplaintThreads([]); return; }
+        const threads: ComplaintThread[] = Object.entries(data).map(([studentId, payload]: [string, any]) => {
+          const msgs = payload?.messages
+            ? Object.entries(payload.messages).map(([mid, m]: [string, any]) => ({
+                id: mid,
+                sender: m.sender,
+                text: m.text,
+                timestamp: m.timestamp,
+                studentId: m.studentId,
+                studentName: m.studentName,
+              }) as ComplaintMessage)
+            : [];
+          const studentName = students.find(s => s.id === studentId)?.name || msgs[0]?.studentName || 'Student';
+          return {
+            studentId,
+            studentName,
+            messages: msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+          };
+        }).sort((a, b) => {
+          const ta = a.messages[a.messages.length - 1]?.timestamp || '';
+          const tb = b.messages[b.messages.length - 1]?.timestamp || '';
+          return new Date(tb).getTime() - new Date(ta).getTime();
+        });
+        setComplaintThreads(threads);
+        if (!selectedThread && threads.length > 0) setSelectedThread(threads[0].studentId);
+      })
     ];
     return () => unsubs.forEach(u => u());
   }, []);
@@ -137,6 +170,16 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
     toast({ title: "Success", description: "Announcement posted" });
   };
 
+  const handleSendAdminReply = async () => {
+    if (!selectedThread || !adminReply.trim()) return;
+    await dbPush(`complaints/${selectedThread}/messages`, {
+      sender: 'admin',
+      text: adminReply.trim(),
+      timestamp: new Date().toISOString()
+    });
+    setAdminReply('');
+  };
+
   const StatCard = ({ title, value, icon: Icon, gradient, delay = 0 }: any) => (
     <Card className={`stat-card border-0 shadow-xl ${gradient} animate-fade-in`} style={{ animationDelay: `${delay}s` }}>
       <CardContent className="p-6">
@@ -176,6 +219,76 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
     return (
       <div ref={ref}>
         <SettingsPanel currentPage={currentPage} />
+      </div>
+    );
+  }
+
+  // Complaints page
+  if (currentPage === 'complaints') {
+    const activeThread = complaintThreads.find(t => t.studentId === selectedThread) || null;
+    return (
+      <div ref={ref} className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div><h3 className="text-2xl font-display font-bold">Student Complaints</h3><p className="text-muted-foreground">Review and respond to student complaints</p></div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="shadow-xl border-0 lg:col-span-1">
+            <CardHeader className="border-b border-border/50"><CardTitle className="font-display flex items-center gap-2"><MessageSquare className="w-5 h-5 text-secondary" />Threads</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border/50">
+                {complaintThreads.map((t) => {
+                  const last = t.messages[t.messages.length - 1];
+                  const isActive = selectedThread === t.studentId;
+                  return (
+                    <button key={t.studentId} className={`w-full text-left p-4 hover:bg-muted/30 ${isActive ? 'bg-muted/20' : ''}`} onClick={() => setSelectedThread(t.studentId)}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium">{t.studentName}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">{last?.text || 'No messages'}</p>
+                        </div>
+                        {last && <span className="text-xs text-muted-foreground">{new Date(last.timestamp).toLocaleDateString()}</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+                {complaintThreads.length === 0 && <div className="p-6 text-center text-muted-foreground">No complaints yet</div>}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-xl border-0 lg:col-span-2">
+            <CardHeader className="border-b border-border/50"><CardTitle className="font-display">{activeThread ? `Conversation with ${activeThread.studentName}` : 'Select a thread'}</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              {activeThread ? (
+                <>
+                  <div className="h-[460px] overflow-y-auto p-4 space-y-3 bg-muted/30">
+                    {activeThread.messages.map(msg => (
+                      <div key={msg.id} className={`flex ${msg.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[75%] p-3 rounded-2xl ${msg.sender === 'admin' ? 'bg-secondary text-secondary-foreground rounded-br-sm' : 'bg-primary/10 text-foreground rounded-bl-sm'}`}>
+                          <p className="text-sm">{msg.text}</p>
+                          <p className="text-[10px] mt-1 opacity-70">{new Date(msg.timestamp).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="p-4 border-t border-border/50 flex items-center gap-3">
+                    <Textarea
+                      placeholder="Write a reply..."
+                      value={adminReply}
+                      onChange={(e) => setAdminReply(e.target.value)}
+                      className="flex-1"
+                      rows={2}
+                    />
+                    <Button className="bg-gradient-primary" onClick={handleSendAdminReply} disabled={!adminReply.trim()}>
+                      Send
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="p-12 text-center text-muted-foreground">Select a student thread to view messages</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }

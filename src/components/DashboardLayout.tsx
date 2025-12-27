@@ -13,6 +13,7 @@ import {
   FileText,
   Bell,
   Megaphone,
+  MessageSquare,
   Menu,
   X,
   ChevronRight,
@@ -45,6 +46,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentPage
         return [
           { label: 'Dashboard', icon: <Home className="w-5 h-5" />, path: 'dashboard' },
           { label: 'Announcements', icon: <Megaphone className="w-5 h-5" />, path: 'announcements' },
+          { label: 'Complaints', icon: <MessageSquare className="w-5 h-5" />, path: 'complaints' },
           { label: 'Teachers', icon: <Users className="w-5 h-5" />, path: 'teachers' },
           { label: 'Classes', icon: <BookOpen className="w-5 h-5" />, path: 'classes' },
           { label: 'Students', icon: <GraduationCap className="w-5 h-5" />, path: 'students' },
@@ -71,6 +73,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, currentPage
           { label: 'Homework', icon: <ClipboardList className="w-5 h-5" />, path: 'homework' },
           { label: 'Grades', icon: <FileText className="w-5 h-5" />, path: 'grades' },
           { label: 'Announcements', icon: <Bell className="w-5 h-5" />, path: 'announcements' },
+          { label: 'Complaint Box', icon: <MessageSquare className="w-5 h-5" />, path: 'complaints' },
           { label: 'Settings', icon: <Settings className="w-5 h-5" />, path: 'settings' },
         ];
       default:
