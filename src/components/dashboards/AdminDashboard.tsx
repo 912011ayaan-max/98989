@@ -27,6 +27,7 @@ interface Teacher { id: string; name: string; username: string; password: string
 interface Class { id: string; name: string; grade: string; teacherId: string; teacherName: string; secondaryTeachers?: { id: string; name: string }[]; }
 interface Student { id: string; name: string; username: string; password: string; classId: string; className: string; }
 interface Announcement { id: string; title: string; content: string; priority: 'normal' | 'important' | 'urgent'; createdAt: string; author: string; }
+interface Complaint { id: string; studentId: string; studentName: string; classId: string; className: string; subject: string; message: string; createdAt: string; status: 'sent' | 'read' | 'resolved'; read: boolean; }
 
 interface AdminDashboardProps { currentPage: string; }
 
@@ -35,6 +36,8 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [showPanel, setShowPanel] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [newTeacher, setNewTeacher] = useState({ name: '', username: '', password: '', subject: '' });
@@ -51,7 +54,8 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
       dbListen('teachers', (data) => setTeachers(data ? Object.entries(data).map(([id, t]: [string, any]) => ({ id, ...t })) : [])),
       dbListen('classes', (data) => setClasses(data ? Object.entries(data).map(([id, c]: [string, any]) => ({ id, ...c })) : [])),
       dbListen('students', (data) => setStudents(data ? Object.entries(data).map(([id, s]: [string, any]) => ({ id, ...s })) : [])),
-      dbListen('announcements', (data) => setAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : []))
+      dbListen('announcements', (data) => setAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [])),
+      dbListen('complaints', (data) => setComplaints(data ? Object.entries(data).map(([id, c]: [string, any]) => ({ id, ...c })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : []))
     ];
     return () => unsubs.forEach(u => u());
   }, []);
@@ -176,6 +180,72 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
     return (
       <div ref={ref}>
         <SettingsPanel currentPage={currentPage} />
+      </div>
+    );
+  }
+
+  if (currentPage === 'complaints') {
+    return (
+      <div ref={ref} className="h-[calc(100vh-120px)] flex gap-4">
+        {/* Sidebar */}
+        <div className="w-1/3 flex flex-col gap-4">
+           <Card className="flex-1 border-0 shadow-xl overflow-hidden flex flex-col">
+             <CardHeader className="p-4 border-b border-border/50 bg-muted/20">
+               <CardTitle className="font-display text-lg">Messages</CardTitle>
+             </CardHeader>
+             <div className="flex-1 overflow-y-auto p-2 space-y-2">
+               {complaints.map(complaint => (
+                 <div 
+                   key={complaint.id} 
+                   onClick={() => setSelectedComplaint(complaint)}
+                   className={`p-3 rounded-xl cursor-pointer transition-all ${selectedComplaint?.id === complaint.id ? 'bg-primary/10 border-primary/20' : 'hover:bg-muted/50 border-transparent'} border`}
+                 >
+                   <div className="flex justify-between items-start mb-1">
+                     <span className="font-semibold text-sm">{complaint.studentName}</span>
+                     <span className="text-[10px] text-muted-foreground">{new Date(complaint.createdAt).toLocaleDateString()}</span>
+                   </div>
+                   <p className="text-xs font-medium truncate">{complaint.subject}</p>
+                   <p className="text-xs text-muted-foreground truncate">{complaint.message}</p>
+                 </div>
+               ))}
+               {complaints.length === 0 && <div className="p-4 text-center text-muted-foreground text-sm">No complaints</div>}
+             </div>
+           </Card>
+        </div>
+
+        {/* Main Chat Area */}
+        <div className="flex-1">
+          <Card className="h-full border-0 shadow-xl overflow-hidden flex flex-col">
+            {selectedComplaint ? (
+              <>
+                <CardHeader className="p-4 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="font-display text-lg">{selectedComplaint.studentName}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{selectedComplaint.className}</p>
+                  </div>
+                  <div className="flex gap-2">
+                     <Button size="sm" variant="outline" onClick={() => dbUpdate(`complaints/${selectedComplaint.id}`, { status: 'resolved' })}><Check className="w-4 h-4 mr-2" />Resolve</Button>
+                     <Button variant="ghost" size="icon" onClick={() => dbRemove(`complaints/${selectedComplaint.id}`)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 p-6 overflow-y-auto bg-muted/5">
+                  <div className="max-w-[80%] bg-white p-4 rounded-2xl rounded-tl-none shadow-sm border border-border/50">
+                    <h4 className="font-semibold mb-2 text-primary">{selectedComplaint.subject}</h4>
+                    <p className="text-sm whitespace-pre-wrap">{selectedComplaint.message}</p>
+                    <p className="text-[10px] text-muted-foreground mt-4 text-right">{new Date(selectedComplaint.createdAt).toLocaleString()}</p>
+                  </div>
+                </CardContent>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+                <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                  <Megaphone className="w-8 h-8 opacity-50" />
+                </div>
+                <p>Select a complaint to view details</p>
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
     );
   }

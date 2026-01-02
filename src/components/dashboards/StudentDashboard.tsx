@@ -1,12 +1,16 @@
 import React, { useState, useEffect, forwardRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import SlidePanel from '@/components/ui/SlidePanel';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { dbListen, dbPush } from '@/lib/firebase';
 import { 
   Calendar, ClipboardList, FileText, Bell, Check, X, 
   TrendingUp, Award, Clock, BookOpen, Megaphone, Upload,
-  CheckCircle2, AlertCircle, BarChart3, Star
+  CheckCircle2, AlertCircle, BarChart3, Star, Send
 } from 'lucide-react';
 
 interface Homework { id: string; title: string; description: string; dueDate: string; classId: string; className: string; subject: string; createdAt: string; }
@@ -20,6 +24,13 @@ interface StudentDashboardProps { currentPage: string; }
 
 const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ currentPage }, ref) => {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [showSubmitPanel, setShowSubmitPanel] = useState(false);
+  const [selectedHomework, setSelectedHomework] = useState<Homework | null>(null);
+  const [submissionText, setSubmissionText] = useState('');
+  const [submissionLink, setSubmissionLink] = useState('');
+  const [complaintSubject, setComplaintSubject] = useState('');
+  const [complaintMessage, setComplaintMessage] = useState('');
   const [homework, setHomework] = useState<Homework[]>([]);
   const [mySubmissions, setMySubmissions] = useState<Submission[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -53,9 +64,98 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
 
   const isSubmitted = (hwId: string) => mySubmissions.some(s => s.homeworkId === hwId);
 
-  const handleSubmitHomework = async (hw: Homework) => {
-    await dbPush('submissions', { homeworkId: hw.id, studentId: user?.id, studentName: user?.name, submittedAt: new Date().toISOString(), status: 'submitted' });
+  const handleSubmitHomework = (hw: Homework) => {
+    setSelectedHomework(hw);
+    setSubmissionText('');
+    setSubmissionLink('');
+    setShowSubmitPanel(true);
   };
+
+  const handleConfirmSubmit = async () => {
+    if (!selectedHomework) return;
+    
+    if (!submissionText && !submissionLink) {
+      toast({ title: "Error", description: "Please add some text or a link", variant: "destructive" });
+      return;
+    }
+
+    await dbPush('submissions', {
+      homeworkId: selectedHomework.id,
+      studentId: user?.id,
+      studentName: user?.name,
+      submittedAt: new Date().toISOString(),
+      status: 'submitted',
+      content: submissionText,
+      link: submissionLink
+    });
+    
+    setShowSubmitPanel(false);
+    toast({ title: "Success", description: "Homework submitted successfully" });
+  };
+
+  const handleSubmitComplaint = async () => {
+    if (!complaintSubject || !complaintMessage) {
+      toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
+      return;
+    }
+    await dbPush('complaints', {
+      studentId: user?.id,
+      studentName: user?.name,
+      classId: user?.classId,
+      className: user?.className,
+      subject: complaintSubject,
+      message: complaintMessage,
+      createdAt: new Date().toISOString(),
+      status: 'sent',
+      read: false
+    });
+    setComplaintSubject('');
+    setComplaintMessage('');
+    toast({ title: "Success", description: "Complaint sent to Principal" });
+  };
+
+  const submissionPanel = (
+    <SlidePanel
+      isOpen={showSubmitPanel}
+      onClose={() => setShowSubmitPanel(false)}
+      title="Submit Homework"
+    >
+      <div className="space-y-6">
+        {selectedHomework && (
+          <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+             <h4 className="font-semibold">{selectedHomework.title}</h4>
+             <p className="text-sm text-muted-foreground mt-1">{selectedHomework.subject} • Due {new Date(selectedHomework.dueDate).toLocaleDateString()}</p>
+             <p className="text-sm mt-2">{selectedHomework.description}</p>
+          </div>
+        )}
+        
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-muted-foreground">Your Work / Answer</label>
+          <Textarea
+            placeholder="Type your homework answer here..."
+            className="min-h-[200px] resize-none"
+            value={submissionText}
+            onChange={(e) => setSubmissionText(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-muted-foreground">Attachments / Link</label>
+          <Input
+            placeholder="Paste a link to your work (Google Docs, Drive, etc.)"
+            value={submissionLink}
+            onChange={(e) => setSubmissionLink(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">Paste a link to your document, presentation, or file.</p>
+        </div>
+
+        <Button className="w-full bg-gradient-primary" onClick={handleConfirmSubmit}>
+          <Upload className="w-4 h-4 mr-2" />
+          Submit Assignment
+        </Button>
+      </div>
+    </SlidePanel>
+  );
 
   const stats = getAttendanceStats();
   const upcomingHomework = getUpcomingHomework();
@@ -288,6 +388,34 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
           })}
           {homework.length === 0 && <Card><CardContent className="p-12 text-center text-muted-foreground">No homework assigned</CardContent></Card>}
         </div>
+        {submissionPanel}
+      </div>
+    );
+  }
+
+  if (currentPage === 'complaints') {
+    return (
+      <div ref={ref} className="space-y-6">
+        <div><h3 className="text-2xl font-display font-bold">Complaints</h3><p className="text-muted-foreground">Send a message to the Principal</p></div>
+        <Card className="shadow-xl border-0">
+          <CardHeader className="border-b border-border/50">
+            <CardTitle className="font-display flex items-center gap-2"><Megaphone className="w-5 h-5 text-destructive" />New Complaint</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Subject</label>
+              <Input placeholder="What is this about?" value={complaintSubject} onChange={(e) => setComplaintSubject(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Message</label>
+              <Textarea placeholder="Describe your issue..." className="min-h-[150px] resize-none" value={complaintMessage} onChange={(e) => setComplaintMessage(e.target.value)} />
+            </div>
+            <Button className="w-full bg-gradient-primary" onClick={handleSubmitComplaint}>
+              <Send className="w-4 h-4 mr-2" />
+              Send Complaint
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

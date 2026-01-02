@@ -36,7 +36,7 @@ interface TimetablePanelProps {
   currentPage: string;
 }
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TIME_SLOTS = [
   '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'
 ];
@@ -80,7 +80,9 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
             const myClass = classList.find(c => c.id === user.classId);
             if (myClass) {
               setClasses([myClass]);
-              setSelectedClass(myClass.id);
+            }
+            if (user.classId) {
+              setSelectedClass(user.classId);
             }
           } else {
             setClasses(classList);
@@ -253,10 +255,20 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
         </CardHeader>
         <CardContent>
           {(() => {
-            const today = DAYS[new Date().getDay() - 1] || 'Monday';
+            const todayIndex = new Date().getDay();
+            const today = DAYS[(todayIndex + 6) % 7];
             const todayEntries = getFilteredTimetable()
               .filter(t => t.day === today)
               .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+            if (user?.role === 'student' && !selectedClass) {
+              return (
+                <div className="text-center py-8 text-muted-foreground">
+                  <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>You are not assigned to any class</p>
+                </div>
+              );
+            }
 
             if (todayEntries.length === 0) {
               return (
