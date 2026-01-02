@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import SlidePanel from '@/components/ui/SlidePanel';
+import TimetablePanel from './TimetablePanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { dbListen, dbPush } from '@/lib/firebase';
@@ -176,6 +177,8 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
       </CardContent>
     </Card>
   );
+
+  if (currentPage === 'schedule') return <div ref={ref}><TimetablePanel currentPage={currentPage} /></div>;
 
   if (currentPage === 'dashboard') {
     return (
