@@ -19,6 +19,7 @@ interface AttendanceRecord { id: string; date: string; status: 'present' | 'abse
 interface GradeRecord { id: string; subject: string; grade: string; date: string; teacherName?: string; }
 interface Announcement { id: string; title: string; content: string; createdAt: string; author?: string; priority?: string; }
 interface ClassAnnouncement { id: string; title: string; content: string; classId: string; className: string; teacherName: string; createdAt: string; }
+interface Complaint { id: string; studentId: string; studentName: string; classId: string; className: string; subject: string; message: string; createdAt: string; status: 'sent' | 'read' | 'resolved'; read: boolean; }
 interface Submission { id: string; homeworkId: string; studentId: string; studentName: string; submittedAt: string; }
 
 interface StudentDashboardProps { currentPage: string; }
@@ -38,6 +39,7 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [schoolAnnouncements, setSchoolAnnouncements] = useState<Announcement[]>([]);
   const [classAnnouncements, setClassAnnouncements] = useState<ClassAnnouncement[]>([]);
+  const [myComplaints, setMyComplaints] = useState<Complaint[]>([]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -47,7 +49,8 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
       dbListen(`attendance/${user.id}`, (data) => setAttendance(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })) : [])),
       dbListen(`grades/${user.id}`, (data) => setGrades(data ? Object.entries(data).map(([id, g]: [string, any]) => ({ id, ...g })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [])),
       dbListen('announcements', (data) => setSchoolAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [])),
-      dbListen('classAnnouncements', (data) => setClassAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).filter((a: ClassAnnouncement) => a.classId === user?.classId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : []))
+      dbListen('classAnnouncements', (data) => setClassAnnouncements(data ? Object.entries(data).map(([id, a]: [string, any]) => ({ id, ...a })).filter((a: ClassAnnouncement) => a.classId === user?.classId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : [])),
+      dbListen('complaints', (data) => setMyComplaints(data ? Object.entries(data).map(([id, c]: [string, any]) => ({ id, ...c })).filter((c: Complaint) => c.studentId === user?.id).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) : []))
     ];
     return () => unsubs.forEach(u => u());
   }, [user?.id, user?.classId]);
@@ -398,27 +401,93 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
 
   if (currentPage === 'complaints') {
     return (
-      <div ref={ref} className="space-y-6">
-        <div><h3 className="text-2xl font-display font-bold">Complaints</h3><p className="text-muted-foreground">Send a message to the Principal</p></div>
-        <Card className="shadow-xl border-0">
-          <CardHeader className="border-b border-border/50">
-            <CardTitle className="font-display flex items-center gap-2"><Megaphone className="w-5 h-5 text-destructive" />New Complaint</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Subject</label>
-              <Input placeholder="What is this about?" value={complaintSubject} onChange={(e) => setComplaintSubject(e.target.value)} />
+      <div ref={ref} className="h-[calc(100vh-120px)] flex flex-col bg-[#efeae2] dark:bg-background rounded-2xl overflow-hidden shadow-2xl border border-border/50 relative">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-[0.06] pointer-events-none bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat"></div>
+        
+        {/* Header */}
+        <div className="h-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/50 flex items-center justify-between px-4 z-10 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Megaphone className="w-5 h-5 text-primary" />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Message</label>
-              <Textarea placeholder="Describe your issue..." className="min-h-[150px] resize-none" value={complaintMessage} onChange={(e) => setComplaintMessage(e.target.value)} />
+            <div className="flex flex-col">
+              <span className="font-semibold text-sm">Principal</span>
+              <span className="text-xs text-muted-foreground">School Administration</span>
             </div>
-            <Button className="w-full bg-gradient-primary" onClick={handleSubmitComplaint}>
-              <Send className="w-4 h-4 mr-2" />
-              Send Complaint
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-4 z-0 space-y-4">
+          <div className="flex justify-center mb-4">
+             <span className="bg-background/80 backdrop-blur-sm px-3 py-1 rounded-lg text-[10px] text-muted-foreground shadow-sm border border-border/50 uppercase tracking-wider font-medium">
+               Today
+             </span>
+          </div>
+
+          {/* Welcome Message (System) */}
+          <div className="flex justify-start">
+            <div className="max-w-[70%] bg-white dark:bg-muted p-3 rounded-2xl rounded-tl-none shadow-sm relative group">
+              <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">Hello {user?.name}, how can we help you today? Feel free to send a message to the Principal.</p>
+              <div className="flex justify-end items-center gap-1 mt-1">
+                <span className="text-[10px] text-muted-foreground/80">System</span>
+              </div>
+            </div>
+          </div>
+
+          {/* User Messages */}
+          {myComplaints.map((msg) => (
+            <div key={msg.id} className="flex justify-end">
+              <div className="max-w-[70%] bg-[#d9fdd3] dark:bg-primary/20 p-3 rounded-2xl rounded-tr-none shadow-sm relative group">
+                <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{msg.message}</p>
+                <div className="flex justify-end items-center gap-1 mt-1">
+                  <span className="text-[10px] text-muted-foreground/80">
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {msg.status === 'read' || msg.status === 'resolved' ? (
+                    <div className="flex -space-x-1">
+                      <Check className="w-3 h-3 text-blue-500" />
+                      <Check className="w-3 h-3 text-blue-500" />
+                    </div>
+                  ) : (
+                    <Check className="w-3 h-3 text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {myComplaints.length === 0 && (
+            <div className="flex justify-center mt-8">
+              <span className="text-xs text-muted-foreground bg-background/50 px-3 py-1 rounded-full">No messages yet</span>
+            </div>
+          )}
+        </div>
+
+        {/* Input Area */}
+        <div className="p-3 bg-background border-t border-border/50 z-10 flex gap-2 items-center shrink-0">
+          <Input 
+            placeholder="Type a message..." 
+            className="flex-1 bg-muted/30 border-0 focus-visible:ring-1 min-h-[44px]" 
+            value={complaintMessage}
+            onChange={(e) => setComplaintMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmitComplaint();
+              }
+            }}
+          />
+          <Button 
+            className="h-11 w-11 rounded-full bg-gradient-primary shrink-0" 
+            size="icon"
+            onClick={handleSubmitComplaint}
+            disabled={!complaintMessage.trim()}
+          >
+            <Send className="w-5 h-5 text-white" />
+          </Button>
+        </div>
       </div>
     );
   }
