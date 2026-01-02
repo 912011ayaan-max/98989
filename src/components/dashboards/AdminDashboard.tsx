@@ -215,7 +215,7 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
 
            <div className="flex-1 overflow-y-auto">
              {complaints
-               .filter(c => c.studentName.toLowerCase().includes(searchTerm.toLowerCase()) || c.subject.toLowerCase().includes(searchTerm.toLowerCase()))
+               .filter(c => (c.studentName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || (c.subject?.toLowerCase() || '').includes(searchTerm.toLowerCase()))
                .map(complaint => (
                <div 
                  key={complaint.id} 
@@ -223,18 +223,18 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
                  className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/30 transition-colors border-b border-border/30 ${selectedComplaint?.id === complaint.id ? 'bg-muted/40' : ''}`}
                >
                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-                   {complaint.studentName.charAt(0)}
+                   {(complaint.studentName || '?').charAt(0)}
                  </div>
                  <div className="flex-1 min-w-0">
                    <div className="flex justify-between items-baseline mb-0.5">
-                     <span className="font-semibold text-sm truncate">{complaint.studentName}</span>
+                     <span className="font-semibold text-sm truncate">{complaint.studentName || 'Unknown Student'}</span>
                      <span className={`text-[10px] ${selectedComplaint?.id === complaint.id ? 'text-primary' : 'text-muted-foreground'}`}>
                        {new Date(complaint.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                      </span>
                    </div>
                    <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                      {complaint.status === 'resolved' && <Check className="w-3 h-3 text-blue-500" />}
-                     {complaint.subject}
+                     {complaint.subject || 'No Subject'}
                    </p>
                  </div>
                </div>
@@ -258,11 +258,11 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
               <div className="h-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border/50 flex items-center justify-between px-4 z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold shadow-sm">
-                    {selectedComplaint.studentName.charAt(0)}
+                    {(selectedComplaint.studentName || '?').charAt(0)}
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-semibold text-sm">{selectedComplaint.studentName}</span>
-                    <span className="text-xs text-muted-foreground">{selectedComplaint.className} • Student</span>
+                    <span className="font-semibold text-sm">{selectedComplaint.studentName || 'Unknown Student'}</span>
+                    <span className="text-xs text-muted-foreground">{selectedComplaint.className || 'Unknown Class'} • Student</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
