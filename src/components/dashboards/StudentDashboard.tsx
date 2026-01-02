@@ -19,7 +19,7 @@ interface AttendanceRecord { id: string; date: string; status: 'present' | 'abse
 interface GradeRecord { id: string; subject: string; grade: string; date: string; teacherName?: string; }
 interface Announcement { id: string; title: string; content: string; createdAt: string; author?: string; priority?: string; }
 interface ClassAnnouncement { id: string; title: string; content: string; classId: string; className: string; teacherName: string; createdAt: string; }
-interface Complaint { id: string; studentId: string; studentName: string; classId: string; className: string; subject: string; message: string; createdAt: string; status: 'sent' | 'read' | 'resolved'; read: boolean; }
+interface Complaint { id: string; studentId: string; studentName: string; classId: string; className: string; subject: string; message: string; createdAt: string; status: 'sent' | 'read' | 'resolved'; read: boolean; sender?: 'student' | 'admin'; }
 interface Submission { id: string; homeworkId: string; studentId: string; studentName: string; submittedAt: string; }
 
 interface StudentDashboardProps { currentPage: string; }
@@ -98,8 +98,8 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
   };
 
   const handleSubmitComplaint = async () => {
-    if (!complaintSubject || !complaintMessage) {
-      toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
+    if (!complaintMessage) {
+      toast({ title: "Error", description: "Please enter a message", variant: "destructive" });
       return;
     }
     await dbPush('complaints', {
@@ -107,15 +107,14 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
       studentName: user?.name,
       classId: user?.classId,
       className: user?.className,
-      subject: complaintSubject,
+      subject: "Chat Message",
       message: complaintMessage,
       createdAt: new Date().toISOString(),
       status: 'sent',
-      read: false
+      read: false,
+      sender: 'student'
     });
-    setComplaintSubject('');
     setComplaintMessage('');
-    toast({ title: "Success", description: "Complaint sent to Principal" });
   };
 
   const submissionPanel = (
@@ -438,20 +437,26 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
 
           {/* User Messages */}
           {myComplaints.map((msg) => (
-            <div key={msg.id} className="flex justify-end">
-              <div className="max-w-[70%] bg-[#d9fdd3] dark:bg-primary/20 p-3 rounded-2xl rounded-tr-none shadow-sm relative group">
+            <div key={msg.id} className={`flex ${msg.sender === 'admin' ? 'justify-start' : 'justify-end'}`}>
+              <div className={`max-w-[70%] p-3 rounded-2xl shadow-sm relative group ${
+                msg.sender === 'admin' 
+                  ? 'bg-white dark:bg-muted rounded-tl-none' 
+                  : 'bg-[#d9fdd3] dark:bg-primary/20 rounded-tr-none'
+              }`}>
                 <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{msg.message}</p>
                 <div className="flex justify-end items-center gap-1 mt-1">
                   <span className="text-[10px] text-muted-foreground/80">
                     {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
-                  {msg.status === 'read' || msg.status === 'resolved' ? (
-                    <div className="flex -space-x-1">
-                      <Check className="w-3 h-3 text-blue-500" />
-                      <Check className="w-3 h-3 text-blue-500" />
-                    </div>
-                  ) : (
-                    <Check className="w-3 h-3 text-muted-foreground" />
+                  {msg.sender !== 'admin' && (
+                    msg.status === 'read' || msg.status === 'resolved' ? (
+                      <div className="flex -space-x-1">
+                        <Check className="w-3 h-3 text-blue-500" />
+                        <Check className="w-3 h-3 text-blue-500" />
+                      </div>
+                    ) : (
+                      <Check className="w-3 h-3 text-muted-foreground" />
+                    )
                   )}
                 </div>
               </div>
@@ -475,14 +480,22 @@ const StudentDashboard = forwardRef<HTMLDivElement, StudentDashboardProps>(({ cu
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleSubmitComplaint();
+                if (complaintMessage.trim()) {
+                  handleSubmitComplaint();
+                }
               }
             }}
           />
           <Button 
             className="h-11 w-11 rounded-full bg-gradient-primary shrink-0" 
             size="icon"
-            onClick={handleSubmitComplaint}
+            onClick={() => {
+              if (!complaintMessage.trim()) {
+                toast({ title: "Error", description: "Please type a message", variant: "destructive" });
+                return;
+              }
+              handleSubmitComplaint();
+            }}
             disabled={!complaintMessage.trim()}
           >
             <Send className="w-5 h-5 text-white" />

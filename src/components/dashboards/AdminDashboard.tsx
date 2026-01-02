@@ -27,7 +27,7 @@ interface Teacher { id: string; name: string; username: string; password: string
 interface Class { id: string; name: string; grade: string; teacherId: string; teacherName: string; secondaryTeachers?: { id: string; name: string }[]; }
 interface Student { id: string; name: string; username: string; password: string; classId: string; className: string; }
 interface Announcement { id: string; title: string; content: string; priority: 'normal' | 'important' | 'urgent'; createdAt: string; author: string; }
-interface Complaint { id: string; studentId: string; studentName: string; classId: string; className: string; subject: string; message: string; createdAt: string; status: 'sent' | 'read' | 'resolved'; read: boolean; }
+interface Complaint { id: string; studentId: string; studentName: string; classId: string; className: string; subject: string; message: string; createdAt: string; status: 'sent' | 'read' | 'resolved'; read: boolean; sender?: 'student' | 'admin'; }
 
 interface AdminDashboardProps { currentPage: string; }
 
@@ -38,6 +38,7 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
+  const [replyMessage, setReplyMessage] = useState('');
   const [showPanel, setShowPanel] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [newTeacher, setNewTeacher] = useState({ name: '', username: '', password: '', subject: '' });
@@ -139,6 +140,26 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
     await dbPush('announcements', { ...newAnnouncement, author: 'Principal', createdAt: new Date().toISOString() });
     setNewAnnouncement({ title: '', content: '', priority: 'normal' });
     toast({ title: "Success", description: "Announcement posted" });
+  };
+
+  const handleSendReply = async () => {
+    if (!selectedComplaint || !replyMessage.trim()) return;
+
+    await dbPush('complaints', {
+      studentId: selectedComplaint.studentId,
+      studentName: selectedComplaint.studentName,
+      classId: selectedComplaint.classId,
+      className: selectedComplaint.className,
+      subject: "Reply",
+      message: replyMessage,
+      createdAt: new Date().toISOString(),
+      status: 'sent',
+      read: false,
+      sender: 'admin'
+    });
+
+    setReplyMessage('');
+    toast({ title: "Sent", description: "Reply sent to student" });
   };
 
   const StatCard = ({ title, value, icon: Icon, gradient, delay = 0 }: any) => (
@@ -288,18 +309,34 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
                   </span>
                 </div>
 
-                {/* Message Bubble */}
-                <div className="flex justify-start">
-                  <div className="max-w-[70%] bg-white dark:bg-muted p-3 rounded-2xl rounded-tl-none shadow-sm relative group">
-                    <p className="font-bold text-xs text-blue-600 mb-1">{selectedComplaint.subject}</p>
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{selectedComplaint.message}</p>
-                    <div className="flex justify-end items-center gap-1 mt-1">
-                      <span className="text-[10px] text-muted-foreground/80">
-                        {new Date(selectedComplaint.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                {complaints
+                  .filter(c => c.studentId === selectedComplaint.studentId)
+                  .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                  .map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[70%] p-3 rounded-2xl shadow-sm relative group ${
+                        msg.sender === 'admin' 
+                          ? 'bg-[#d9fdd3] dark:bg-primary/20 rounded-tr-none' 
+                          : 'bg-white dark:bg-muted rounded-tl-none'
+                      }`}>
+                        {msg.subject !== 'Chat Message' && msg.subject !== 'Reply' && (
+                          <p className="font-bold text-xs text-blue-600 mb-1">{msg.subject}</p>
+                        )}
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{msg.message}</p>
+                        <div className="flex justify-end items-center gap-1 mt-1">
+                          <span className="text-[10px] text-muted-foreground/80">
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {msg.sender === 'admin' && (
+                             <div className="flex -space-x-1">
+                               <Check className="w-3 h-3 text-blue-500" />
+                               <Check className="w-3 h-3 text-blue-500" />
+                             </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  ))}
 
                 {/* System Message if resolved */}
                 {selectedComplaint.status === 'resolved' && (
@@ -311,13 +348,24 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
                 )}
               </div>
 
-              {/* Chat Input Area (Read Only for now) */}
+              {/* Chat Input Area */}
               <div className="p-3 bg-background border-t border-border/50 z-10 flex gap-2 items-center">
-                <Button variant="ghost" size="icon" disabled><Plus className="w-5 h-5 text-muted-foreground" /></Button>
-                <div className="flex-1 bg-muted/30 rounded-lg h-10 flex items-center px-4 text-sm text-muted-foreground cursor-not-allowed">
-                  Replying is currently disabled
-                </div>
-                <Button variant="ghost" size="icon" disabled><Send className="w-5 h-5 text-muted-foreground" /></Button>
+                <Button variant="ghost" size="icon"><Plus className="w-5 h-5 text-muted-foreground" /></Button>
+                <Input 
+                  className="flex-1 bg-muted/30 border-0 focus-visible:ring-1"
+                  placeholder="Type a reply..."
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendReply();
+                    }
+                  }}
+                />
+                <Button variant="ghost" size="icon" onClick={handleSendReply} disabled={!replyMessage.trim()}>
+                  <Send className={`w-5 h-5 ${replyMessage.trim() ? 'text-primary' : 'text-muted-foreground'}`} />
+                </Button>
               </div>
             </>
           ) : (
