@@ -328,29 +328,19 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Start Time *</label>
-              <select
+              <Input
+                type="time"
                 value={newEntry.startTime}
                 onChange={(e) => setNewEntry({ ...newEntry, startTime: e.target.value })}
-                className="w-full h-10 px-3 rounded-lg border border-input bg-background"
-              >
-                {TIME_SLOTS.map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">End Time *</label>
-              <select
+              <Input
+                type="time"
                 value={newEntry.endTime}
                 onChange={(e) => setNewEntry({ ...newEntry, endTime: e.target.value })}
-                className="w-full h-10 px-3 rounded-lg border border-input bg-background"
-              >
-                {TIME_SLOTS.map((time, i) => (
-                  <option key={time} value={TIME_SLOTS[i + 1] || '17:00'}>
-                    {TIME_SLOTS[i + 1] || '17:00'}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 
@@ -370,6 +360,7 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
         </div>
       </SlidePanel>
     </div>
+
   );
 };
 
