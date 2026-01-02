@@ -61,6 +61,22 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
     return () => unsubs.forEach(u => u());
   }, []);
 
+  const conversations = React.useMemo(() => {
+    const groups: Record<string, Complaint[]> = {};
+    complaints.forEach(c => {
+      const key = c.studentId || 'unknown';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(c);
+    });
+    const toMinutes = (iso: string) => new Date(iso).getTime();
+    const convs = Object.values(groups).map(group => {
+      const sorted = group.slice().sort((a, b) => toMinutes(a.createdAt) - toMinutes(b.createdAt));
+      const last = sorted[sorted.length - 1];
+      return last;
+    });
+    return convs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [complaints]);
+
   const handleAddTeacher = async () => {
     if (!newTeacher.name || !newTeacher.username || !newTeacher.password || !newTeacher.subject) {
       toast({ title: "Error", description: "Please fill all fields", variant: "destructive" }); return;
@@ -235,8 +251,8 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
            </div>
 
            <div className="flex-1 overflow-y-auto">
-             {complaints
-               .filter(c => (c.studentName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || (c.subject?.toLowerCase() || '').includes(searchTerm.toLowerCase()))
+             {conversations
+               .filter(c => (c.studentName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || (c.subject?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || (c.message?.toLowerCase() || '').includes(searchTerm.toLowerCase()))
                .map(complaint => (
                <div 
                  key={complaint.id} 
@@ -255,12 +271,12 @@ const AdminDashboard = forwardRef<HTMLDivElement, AdminDashboardProps>(({ curren
                    </div>
                    <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                      {complaint.status === 'resolved' && <Check className="w-3 h-3 text-blue-500" />}
-                     {complaint.subject || 'No Subject'}
+                     {(complaint.subject || 'No Subject') + ' • ' + (complaint.message || '')}
                    </p>
                  </div>
                </div>
              ))}
-             {complaints.length === 0 && (
+             {conversations.length === 0 && (
                <div className="p-8 text-center text-muted-foreground text-sm">
                  <p>No messages</p>
                </div>

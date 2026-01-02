@@ -98,35 +98,23 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
     return timetable.filter(t => t.classId === selectedClass);
   };
 
-  // Dynamic time slots calculation
+  // Dynamic time slots calculation (exact minutes from entries)
   const timeSlots = React.useMemo(() => {
-    const currentTimetable = getFilteredTimetable();
-    if (currentTimetable.length === 0) {
-      // Default slots if no entries
+    const current = getFilteredTimetable();
+    if (current.length === 0) {
       return ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
     }
-
-    let minHour = 24;
-    let maxHour = 0;
-
-    currentTimetable.forEach(t => {
-      const startH = parseInt(t.startTime.split(':')[0]);
-      const endH = parseInt(t.endTime.split(':')[0]);
-      if (startH < minHour) minHour = startH;
-      if (endH > maxHour) maxHour = endH;
-      // Handle case where end time might be like 09:30, we want to include the 09:00 slot
-      if (parseInt(t.endTime.split(':')[1]) > 0) maxHour = endH;
+    const set = new Set<string>();
+    current.forEach(t => {
+      if (t.startTime) set.add(t.startTime);
+      if (t.endTime) set.add(t.endTime);
     });
-
-    // Add buffer
-    minHour = Math.max(7, minHour - 1); // Start 1 hour earlier, but not before 7
-    maxHour = Math.min(18, maxHour + 1); // End 1 hour later, but not after 18
-
-    const slots = [];
-    for (let h = minHour; h < maxHour; h++) {
-      slots.push(`${h.toString().padStart(2, '0')}:00`);
-    }
-    return slots;
+    const toMinutes = (hhmm: string) => {
+      const [h, m] = hhmm.split(':').map(n => parseInt(n, 10));
+      return h * 60 + (m || 0);
+    };
+    const sorted = Array.from(set).sort((a, b) => toMinutes(a) - toMinutes(b));
+    return sorted;
   }, [timetable, selectedClass]);
 
   const getEntryForSlot = (day: string, time: string) => {
@@ -236,10 +224,10 @@ const TimetablePanel: React.FC<TimetablePanelProps> = ({ currentPage }) => {
                 </tr>
               </thead>
               <tbody>
-                {timeSlots.map((time, index) => (
+                {timeSlots.slice(0, -1).map((time, index) => (
                   <tr key={time} className="hover:bg-muted/20 transition-colors">
                     <td className="p-4 border-b border-border/50 font-medium text-muted-foreground">
-                      {time} - {timeSlots[index + 1] || `${parseInt(time.split(':')[0]) + 1}:00`}
+                      {time} - {timeSlots[index + 1]}
                     </td>
                     {DAYS.map(day => {
                       const entry = getEntryForSlot(day, time);
